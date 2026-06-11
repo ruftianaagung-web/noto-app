@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Home, CheckCircle2, Calendar as CalendarIcon, Settings, Lock, Layers, Feather } from 'lucide-react';
+import { Home, CheckCircle2, Calendar as CalendarIcon, Settings, Lock, Layers, Feather, Bell, X } from 'lucide-react';
 import HomeScreen from './screens/HomeScreen';
 import TasksScreen from './screens/TasksScreen';
 import CalendarScreen from './screens/CalendarScreen';
@@ -27,37 +27,68 @@ export default function App() {
   const [currentScreen, setCurrentScreen] = useState<ScreenItem>('home');
   const [isDarkMode, setIsDarkMode] = useState(true); // Sleek interface defaults to dark mode
   const [activeNote, setActiveNote] = useState<Note | null>(null);
+  const [inAppAlarm, setInAppAlarm] = useState<{id: number, title: string, body: string} | null>(null);
 
   useEffect(() => {
-    if (!reminderActive) return;
-
+    // We remove the return block here since we still might want to trigger individual task alarms
     const interval = setInterval(() => {
       const now = new Date();
       const currentHour = now.getHours().toString().padStart(2, '0');
       const currentMinute = now.getMinutes().toString().padStart(2, '0');
       const currentTime = `${currentHour}:${currentMinute}`;
       
-      const todayDate = now.toISOString().split('T')[0];
+      const localDate = new Date(now.getTime() - (now.getTimezoneOffset() * 60000));
+      const todayDate = localDate.toISOString().split('T')[0];
       const lastNotif = localStorage.getItem('noto_last_notif_date');
       
-      if (currentTime === reminderTime && lastNotif !== todayDate) {
-        localStorage.setItem('noto_last_notif_date', todayDate);
+      const sendNotification = (title: string, body: string) => {
+        const id = Date.now();
+        setInAppAlarm({title, body, id});
+        setTimeout(() => setInAppAlarm(prev => prev && prev.id === id ? null : prev), 10000);
         
+        try {
+          const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(880, ctx.currentTime);
+          osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.1);
+          gain.gain.setValueAtTime(0.1, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+          
+          osc.start();
+          osc.stop(ctx.currentTime + 0.5);
+        } catch(e) {}
+        
+        if ('Notification' in window && Notification.permission === 'granted') {
+          try {
+            if (navigator.serviceWorker) {
+              navigator.serviceWorker.getRegistration().then(reg => {
+                if (reg) reg.showNotification(title, { body: body, icon: '/icon.png', badge: '/icon.png' });
+                else new Notification(title, { body, icon: '/icon.png' });
+              }).catch(() => { new Notification(title, { body, icon: '/icon.png' }); });
+            } else {
+               new Notification(title, { body, icon: '/icon.png' });
+            }
+          } catch(e) {}
+        }
+      };
+
+      // 1. Global Daily Reminder
+      if (reminderActive && currentTime === reminderTime && lastNotif !== todayDate) {
+        localStorage.setItem('noto_last_notif_date', todayDate);
         const todayTasks = tasks.filter(t => {
             if (t.date === 'Hari ini' || t.date.toLowerCase() === 'today') return true;
-            try {
-              return new Date(t.date).toISOString().split('T')[0] === todayDate;
-            } catch(e) { return false; }
+            return t.date === todayDate;
         });
-        
         const allCompleted = todayTasks.length > 0 && todayTasks.every(t => t.completed);
         const hasTasks = todayTasks.length > 0;
         
         let title = '';
         let body = '';
-        
-        // If there are no tasks for today, standard message from prompt doesn't cover this well, we use the "masih ada" rule.
-        // Actually prompt says: "Jika semua tugas hari ini selesai ... jika masih ada .."
         if (hasTasks && allCompleted) {
           title = t('notifAllDoneTitle') || "Kerja Bagus! 🎉";
           body = t('notifAllDoneBody') || "Semua tugas hari ini telah selesai. Pertahankan streakmu.";
@@ -65,31 +96,33 @@ export default function App() {
           title = t('notifPendingTitle') || "Jangan Putus Streak Hari Ini 🔥";
           body = t('notifPendingBody') || "Masih ada tugas yang menunggu. Selesaikan targetmu hari ini di Noto.";
         }
-        
-        if ('Notification' in window && Notification.permission === 'granted') {
-          if (navigator.serviceWorker) {
-            navigator.serviceWorker.getRegistration().then(reg => {
-              if (reg) {
-                 reg.showNotification(title, {
-                     body: body,
-                     icon: '/icon.png',
-                     badge: '/icon.png'
-                 });
-              } else {
-                 new Notification(title, { body, icon: '/icon.png' });
-              }
-            }).catch(() => {
-               new Notification(title, { body, icon: '/icon.png' });
-            });
-          } else {
-             new Notification(title, { body, icon: '/icon.png' });
-          }
-        }
+        sendNotification(title, body);
       }
-    }, 60000); 
 
+      // 2. Individual Task Alarms
+      tasks.forEach(t => {
+        // Skip completed tasks, tasks with no alarm, or tasks whose alarm is not right now
+        if (t.completed || !t.alarmTime || t.alarmTime !== currentTime) return;
+
+        // Check if the task is scheduled for today
+        let isToday = false;
+        if (t.date === 'Hari ini' || t.date.toLowerCase() === 'today' || t.date === todayDate) {
+          isToday = true;
+        }
+
+        if (isToday) {
+           const alarmKey = `noto_alarm_${t.id}_${todayDate}_${currentTime}`;
+           if (!localStorage.getItem(alarmKey)) {
+             localStorage.setItem(alarmKey, 'true');
+             sendNotification(t.title, t('alarmDue') || "Tugas sudah waktunya untuk dikerjakan!");
+           }
+        }
+      });
+      
+    }, 10000); // interval is every 10s to ensure we don't miss the 1-minute window
+    
     return () => clearInterval(interval);
-  }, [reminderActive, reminderTime, tasks]);
+  }, [reminderActive, reminderTime, tasks, t]);
 
   // Jika PIN ada tp belum diunlock, kita tampilkan layar kunci
   const isLocked = !!appPin && !isUnlocked;
@@ -127,6 +160,19 @@ export default function App() {
   return (
     <div className={`w-full h-[100dvh] flex flex-col md:flex-row ${!isDarkMode ? 'light-theme' : 'bg-slate-950'} text-slate-200 font-sans relative overflow-hidden`}>
       
+      {inAppAlarm && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[200] max-w-sm w-[90%] md:w-full bg-indigo-600 shadow-xl shadow-indigo-600/20 rounded-2xl p-4 flex items-start gap-4 animate-in slide-in-from-top-4 fade-in duration-300">
+           <Bell className="w-6 h-6 text-white shrink-0 mt-0.5" />
+           <div className="flex-1">
+             <h4 className="font-bold text-white text-sm mb-1">{inAppAlarm.title}</h4>
+             <p className="text-white/80 text-xs leading-relaxed">{inAppAlarm.body}</p>
+           </div>
+           <button onClick={() => setInAppAlarm(null)} className="p-1 hover:bg-white/10 rounded-lg transition-colors text-white/80 hover:text-white">
+             <X className="w-4 h-4" />
+           </button>
+        </div>
+      )}
+
       {/* Desktop Sidebar / Mobile Bottom Nav */}
       {currentScreen !== 'note-editor' && (
         <nav className="flex-none order-last md:order-first w-full md:w-[240px] lg:w-[280px] bg-slate-900/95 border-t md:border-t-0 md:border-r border-slate-800 flex md:flex-col justify-between md:justify-start z-50 relative pb-safe md:pb-0 h-[72px] md:h-screen md:pt-8 md:px-4">

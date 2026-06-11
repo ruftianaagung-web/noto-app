@@ -24,4 +24,5 @@ export interface Task {
   completed: boolean;
   pinned?: boolean;
   repeat?: 'once' | 'daily';
+  alarmTime?: string;
 }

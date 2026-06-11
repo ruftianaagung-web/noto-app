@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Trash2, ClipboardList, Repeat } from 'lucide-react';
+import { Plus, Trash2, ClipboardList, Repeat, Bell, X } from 'lucide-react';
 import { useAppStore } from '../store';
 import { useTranslation } from '../translations';
 import { Task } from '../types';
@@ -12,6 +12,7 @@ export default function TasksScreen({ onNavigate }: { onNavigate?: (s: any) => v
   const [newTaskPriority, setNewTaskPriority] = useState<'Tinggi' | 'Sedang' | 'Rendah'>('Sedang');
   const [newTaskRepeat, setNewTaskRepeat] = useState<'once' | 'daily'>('once');
   const [newTaskDate, setNewTaskDate] = useState<string>(new Date(new Date().getTime() - (new Date().getTimezoneOffset() * 60000)).toISOString().split('T')[0]);
+  const [newTaskAlarm, setNewTaskAlarm] = useState<string>('');
   const { tasks, addTask, updateTask, toggleTask, lang } = useAppStore();
   const t = useTranslation(lang);
 
@@ -21,18 +22,23 @@ export default function TasksScreen({ onNavigate }: { onNavigate?: (s: any) => v
     setNewTaskPriority(task.priority);
     setNewTaskRepeat(task.repeat || 'once');
     setNewTaskDate(task.date || new Date(new Date().getTime() - (new Date().getTimezoneOffset() * 60000)).toISOString().split('T')[0]);
+    setNewTaskAlarm(task.alarmTime || '');
   };
 
   const handleAddTaskSubmit = (e?: React.FormEvent) => {
     e?.preventDefault();
     if (newTaskTitle.trim()) {
+       if (newTaskAlarm && 'Notification' in window && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
+         Notification.requestPermission().catch(() => {});
+       }
        if (editingTask) {
          updateTask({
            ...editingTask,
            title: newTaskTitle.trim(),
            priority: newTaskPriority,
            repeat: newTaskRepeat,
-           date: newTaskDate
+           date: newTaskDate,
+           alarmTime: newTaskAlarm || undefined
          });
        } else {
          const locale = lang === 'en' ? 'en-US' : 'id-ID';
@@ -43,7 +49,8 @@ export default function TasksScreen({ onNavigate }: { onNavigate?: (s: any) => v
            priority: newTaskPriority,
            date: newTaskDate,
            time: new Date().toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' }),
-           repeat: newTaskRepeat
+           repeat: newTaskRepeat,
+           alarmTime: newTaskAlarm || undefined
          });
        }
     }
@@ -51,6 +58,7 @@ export default function TasksScreen({ onNavigate }: { onNavigate?: (s: any) => v
     setNewTaskPriority('Sedang');
     setNewTaskRepeat('once');
     setNewTaskDate(new Date(new Date().getTime() - (new Date().getTimezoneOffset() * 60000)).toISOString().split('T')[0]);
+    setNewTaskAlarm('');
     setIsAddingTask(false);
     setEditingTask(null);
   };
@@ -193,67 +201,110 @@ export default function TasksScreen({ onNavigate }: { onNavigate?: (s: any) => v
       )}
 
       {isAddingTask && (
-        <div className="absolute inset-0 bg-slate-950/95 z-[100] flex flex-col justify-end animate-in fade-in duration-200">
-           <div className="bg-slate-900 border-t border-slate-800 p-6 rounded-t-3xl animate-in slide-in-from-bottom-8 duration-300">
-              <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4">{editingTask ? t('editTask') || 'Edit Tugas' : t('newTask')}</h3>
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[100] flex flex-col pt-8 sm:p-4 animate-in fade-in duration-200 overflow-y-auto overscroll-none">
+           <div className="bg-slate-900 border-t sm:border border-slate-800 p-5 sm:p-6 rounded-t-3xl sm:rounded-3xl w-full max-w-[480px] mx-auto mt-auto sm:my-auto animate-in slide-in-from-bottom-8 sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-300 shadow-2xl relative">
+              <div className="flex items-center justify-between mb-5">
+                <h3 className="text-base font-bold text-slate-200">{editingTask ? (lang === 'id' ? 'Edit Tugas' : 'Edit Task') : (lang === 'id' ? 'Tugas Baru' : 'New Task')}</h3>
+                <button onClick={() => { setIsAddingTask(false); setEditingTask(null); setNewTaskTitle(''); }} className="p-2 bg-slate-800/50 hover:bg-slate-800 rounded-full text-slate-400 hover:text-slate-200 transition-colors">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
               <form onSubmit={handleAddTaskSubmit}>
                  <textarea 
                    autoFocus
                    value={newTaskTitle}
                    onChange={e => setNewTaskTitle(e.target.value)}
                    placeholder={t('taskPlaceholder') || "Contoh: Belajar UI/UX..."}
-                   className="w-full h-48 bg-slate-950 border border-slate-800 rounded-2xl px-4 py-4 text-slate-50 focus:outline-none focus:border-indigo-500 mb-4 resize-none"
+                   className="w-full min-h-[80px] bg-slate-950/50 border border-slate-800/80 rounded-2xl px-4 py-4 text-base text-slate-50 placeholder:text-slate-500 focus:outline-none focus:border-indigo-500/50 focus:bg-slate-950 mb-5 resize-none transition-all"
                  />
-                 <div className="flex flex-col gap-4 mb-4 md:flex-row">
-                   <div className="flex-1 flex flex-col">
-                     <span className="text-[10px] text-slate-500 uppercase font-bold mb-2 ml-1 hidden md:block">{lang === 'id' ? 'Prioritas' : 'Priority'}</span>
-                     <div className="flex gap-2">
-                       {(['Tinggi', 'Sedang', 'Rendah'] as const).map(p => {
+                 
+                 <div className="space-y-4 mb-6">
+                   {/* Priority */}
+                   <div>
+                     <span className="text-[10px] text-slate-500 font-medium mb-1.5 ml-1 block">{lang === 'id' ? 'Prioritas' : 'Priority'}</span>
+                     <div className="flex gap-1.5 p-1 bg-slate-950/50 rounded-xl border border-slate-800/50">
+                       {(['Rendah', 'Sedang', 'Tinggi'] as const).map(p => {
                          const pLabel = p === 'Tinggi' ? t('high') || p : p === 'Sedang' ? t('medium') || p : t('low') || p;
+                         const activeClass = 
+                            p === 'Tinggi' ? 'bg-orange-500/20 text-orange-400 font-bold shadow-sm' : 
+                            p === 'Sedang' ? 'bg-blue-500/20 text-blue-400 font-bold shadow-sm' : 
+                            'bg-slate-700/50 text-slate-300 font-bold shadow-sm';
                          return (
                          <button
                            key={p}
                            type="button"
                            onClick={() => setNewTaskPriority(p)}
-                           className={`flex-1 py-2 text-xs font-bold rounded-xl border ${newTaskPriority === p ? 'bg-indigo-600/20 border-indigo-500 text-indigo-400' : 'bg-slate-950 border-slate-800 text-slate-500'}`}
+                           className={`flex-1 py-1.5 text-xs rounded-lg transition-all ${newTaskPriority === p ? activeClass : 'text-slate-500 hover:text-slate-400 hover:bg-slate-800/50'}`}
                          >
                            {pLabel}
                          </button>
                        )})}
                      </div>
                    </div>
-                   <div className="w-full md:w-auto flex flex-col">
-                     <span className="text-[10px] text-slate-500 uppercase font-bold mb-2 ml-1 hidden md:block">{lang === 'id' ? 'Tanggal' : 'Date'}</span>
-                     <input
-                       type="date"
-                       value={newTaskDate}
-                       onChange={e => setNewTaskDate(e.target.value)}
-                       className="w-full md:w-auto bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 min-h-[34px] text-sm text-slate-50 focus:outline-none focus:border-indigo-500"
-                       style={{ colorScheme: 'dark' }}
-                     />
+
+                   {/* Date & Time */}
+                   <div className="flex gap-3">
+                     <div className="flex-1">
+                       <span className="text-[10px] text-slate-500 font-medium mb-1.5 ml-1 block">{lang === 'id' ? 'Tanggal' : 'Date'}</span>
+                       <input
+                         type="date"
+                         value={newTaskDate}
+                         onChange={e => setNewTaskDate(e.target.value)}
+                         className="w-full bg-slate-950/50 border border-slate-800/50 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500/50 transition-colors"
+                         style={{ colorScheme: 'dark' }}
+                       />
+                     </div>
+                     <div className="flex-1">
+                       <span className="text-[10px] text-slate-500 font-medium mb-1.5 ml-1 flex items-center gap-1">
+                         <Bell className="w-3 h-3 text-indigo-400" />
+                         {lang === 'id' ? 'Alarm' : 'Alarm'}
+                       </span>
+                       <div className="relative">
+                         <input
+                           type="time"
+                           value={newTaskAlarm}
+                           onChange={e => setNewTaskAlarm(e.target.value)}
+                           className="w-full bg-slate-950/50 border border-slate-800/50 rounded-xl pl-3 pr-8 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500/50 transition-colors"
+                           style={{ colorScheme: 'dark' }}
+                         />
+                         {newTaskAlarm && (
+                           <button 
+                             type="button" 
+                             onClick={() => setNewTaskAlarm('')}
+                             className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors bg-slate-800 rounded-full p-0.5"
+                           >
+                             <X className="w-3 h-3" />
+                           </button>
+                         )}
+                       </div>
+                     </div>
+                   </div>
+
+                   {/* Repeat */}
+                   <div>
+                     <span className="text-[10px] text-slate-500 font-medium mb-1.5 ml-1 block">{lang === 'id' ? 'Perulangan' : 'Repeat'}</span>
+                     <div className="flex gap-1.5 p-1 bg-slate-950/50 rounded-xl border border-slate-800/50">
+                       <button
+                         type="button"
+                         onClick={() => setNewTaskRepeat('once')}
+                         className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs rounded-lg transition-all ${newTaskRepeat === 'once' ? 'bg-slate-700/50 text-slate-200 font-bold shadow-sm' : 'text-slate-500 hover:text-slate-400 hover:bg-slate-800/50'}`}
+                       >
+                         {lang === 'id' ? 'Sekali Aja' : 'Once'}
+                       </button>
+                       <button
+                         type="button"
+                         onClick={() => setNewTaskRepeat('daily')}
+                         className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs rounded-lg transition-all ${newTaskRepeat === 'daily' ? 'bg-indigo-500/20 text-indigo-400 font-bold shadow-sm' : 'text-slate-500 hover:text-slate-400 hover:bg-slate-800/50'}`}
+                       >
+                         <Repeat className="w-3 h-3" />
+                         {lang === 'id' ? 'Tiap Hari' : 'Daily'}
+                       </button>
+                     </div>
                    </div>
                  </div>
-                 <div className="flex gap-2 mb-6">
-                   <button
-                     type="button"
-                     onClick={() => setNewTaskRepeat('once')}
-                     className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold rounded-xl border ${newTaskRepeat === 'once' ? 'bg-indigo-600/20 border-indigo-500 text-indigo-400' : 'bg-slate-950 border-slate-800 text-slate-500'}`}
-                   >
-                     {lang === 'id' ? 'Sekali Aja' : 'Once'}
-                   </button>
-                   <button
-                     type="button"
-                     onClick={() => setNewTaskRepeat('daily')}
-                     className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold rounded-xl border ${newTaskRepeat === 'daily' ? 'bg-indigo-600/20 border-indigo-500 text-indigo-400' : 'bg-slate-950 border-slate-800 text-slate-500'}`}
-                   >
-                     <Repeat className="w-3.5 h-3.5" />
-                     {lang === 'id' ? 'Tiap Hari' : 'Daily'}
-                   </button>
-                 </div>
-                 <div className="flex gap-3">
-                   <button type="button" onClick={() => { setIsAddingTask(false); setEditingTask(null); setNewTaskTitle(''); }} className="flex-1 px-4 py-3 rounded-xl bg-slate-800 text-slate-50 font-bold hover:bg-slate-700 transition-colors">{t('cancel')}</button>
-                   <button type="submit" className="flex-1 px-4 py-3 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-500 transition-colors">{t('save')}</button>
-                 </div>
+
+                 <button type="submit" className="w-full py-3.5 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-500 transition-colors shadow-lg shadow-indigo-600/20">{t('save')}</button>
               </form>
            </div>
         </div>
@@ -286,6 +337,12 @@ const TaskCard: React.FC<{ task: Task, last?: boolean, onToggle: () => void, onE
            <span className="text-[10px] text-slate-500 font-mono">
              {task.date && task.date.includes('-') && task.date !== new Date(new Date().getTime() - (new Date().getTimezoneOffset() * 60000)).toISOString().split('T')[0] ? `${task.date} • ` : ''}{task.time}
            </span>
+           {task.alarmTime && (
+             <span className="text-[10px] flex gap-1 items-center font-bold text-slate-400 bg-slate-800/50 px-1.5 py-0.5 rounded">
+               <Bell className="w-3 h-3" />
+               {task.alarmTime}
+             </span>
+           )}
            {task.repeat === 'daily' && (
              <span className="text-[8px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded flex-shrink-0 text-indigo-400 bg-indigo-500/10 flex items-center gap-1">
                <Repeat className="w-2.5 h-2.5" />
