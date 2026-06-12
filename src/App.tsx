@@ -31,7 +31,7 @@ export default function App() {
     localStorage.setItem('noto_theme', appTheme);
   }, [appTheme]);
   const [activeNote, setActiveNote] = useState<Note | null>(null);
-  const [inAppAlarm, setInAppAlarm] = useState<{id: number, title: string, body: string} | null>(null);
+  const [inAppAlarm, setInAppAlarm] = useState<{id: number, title: string, body: string, isAlarm?: boolean} | null>(null);
 
   useEffect(() => {
     // We remove the return block here since we still might want to trigger individual task alarms
@@ -45,10 +45,18 @@ export default function App() {
       const todayDate = localDate.toISOString().split('T')[0];
       const lastNotif = localStorage.getItem('noto_last_notif_date_time');
       
-      const sendNotification = (title: string, body: string) => {
+      const sendNotification = (title: string, body: string, isAlarm: boolean = false) => {
         const id = Date.now();
-        setInAppAlarm({title, body, id});
-        setTimeout(() => setInAppAlarm(prev => prev && prev.id === id ? null : prev), 10000);
+        setInAppAlarm({title, body, id, isAlarm});
+        if (!isAlarm) {
+          setTimeout(() => setInAppAlarm(prev => prev && prev.id === id ? null : prev), 10000);
+        }
+        
+        try {
+          // Play a native sound via HTML Audio for maximum compatibility (won't throw without interaction)
+          const audio = new Audio('/alarm.mp3');
+          audio.play().catch(() => {});
+        } catch(e) {}
         
         try {
           const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -68,16 +76,24 @@ export default function App() {
         } catch(e) {}
         
         if ('Notification' in window && Notification.permission === 'granted') {
-          try {
-            if (navigator.serviceWorker) {
-              navigator.serviceWorker.getRegistration().then(reg => {
-                if (reg && reg.active) reg.showNotification(title, { body: body, icon: '/icon.png', badge: '/icon.png' });
-                else new Notification(title, { body, icon: '/icon.png' });
-              }).catch(() => { new Notification(title, { body, icon: '/icon.png' }); });
-            } else {
-               new Notification(title, { body, icon: '/icon.png' });
-            }
-          } catch(e) {}
+          const options: NotificationOptions = { 
+            body: body, 
+            icon: '/icon.png', 
+            badge: '/icon.png',
+            vibrate: [500, 250, 500, 250, 500, 250, 500, 250, 500],
+            requireInteraction: isAlarm,
+            silent: false
+          };
+          
+          if (navigator.serviceWorker) {
+            navigator.serviceWorker.ready.then(reg => {
+              reg.showNotification(title, options);
+            }).catch(() => {
+              new Notification(title, options);
+            });
+          } else {
+            new Notification(title, options);
+          }
         }
       };
 
@@ -85,7 +101,7 @@ export default function App() {
       if (reminderActive && currentTime === reminderTime && lastNotif !== `${todayDate}_${reminderTime}`) {
         localStorage.setItem('noto_last_notif_date_time', `${todayDate}_${reminderTime}`);
         const todayTasks = tasks.filter(t => {
-            if (t.date === 'Hari ini' || t.date.toLowerCase() === 'today') return true;
+            if (t.date === 'Hari ini' || t.date.toLowerCase() === 'today' || t.repeat === 'daily') return true;
             return t.date === todayDate;
         });
         const allCompleted = todayTasks.length > 0 && todayTasks.every(t => t.completed);
@@ -100,25 +116,26 @@ export default function App() {
           title = t('notifPendingTitle') || "Jangan Putus Streak Hari Ini 🔥";
           body = t('notifPendingBody') || "Masih ada tugas yang menunggu. Selesaikan targetmu hari ini di Noto.";
         }
-        sendNotification(title, body);
+        sendNotification(title, body, false);
       }
 
       // 2. Individual Task Alarms
-      tasks.forEach(t => {
+      tasks.forEach(task => {
         // Skip completed tasks, tasks with no alarm, or tasks whose alarm is not right now
-        if (t.completed || !t.alarmTime || t.alarmTime !== currentTime) return;
+        if (task.completed || !task.alarmTime || task.alarmTime !== currentTime) return;
 
         // Check if the task is scheduled for today
         let isToday = false;
-        if (t.date === 'Hari ini' || t.date.toLowerCase() === 'today' || t.date === todayDate) {
+        if (task.date === 'Hari ini' || task.date.toLowerCase() === 'today' || task.date === todayDate || task.repeat === 'daily') {
           isToday = true;
         }
 
         if (isToday) {
-           const alarmKey = `noto_alarm_${t.id}_${todayDate}_${currentTime}`;
+           const alarmKey = `noto_alarm_${task.id}_${todayDate}_${currentTime}`;
            if (!localStorage.getItem(alarmKey)) {
              localStorage.setItem(alarmKey, 'true');
-             sendNotification(t.title, t('alarmDue') || "Tugas sudah waktunya untuk dikerjakan!");
+             const message = lang === 'id' ? `Ayo lakukan tugas ${task.title} kamu!` : `Time to do your task: ${task.title}!`;
+             sendNotification(task.title, message, true);
            }
         }
       });
@@ -170,7 +187,22 @@ export default function App() {
   return (
     <div className={`w-full h-[100dvh] flex flex-col md:flex-row ${getThemeClass()} text-slate-200 font-sans relative overflow-hidden`}>
       
-      {inAppAlarm && (
+      {inAppAlarm && inAppAlarm.isAlarm && (
+        <div className="absolute inset-0 z-[999] bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-6 animate-in fade-in duration-300">
+           <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 max-w-sm w-full flex flex-col items-center text-center shadow-2xl shadow-indigo-600/20">
+             <div className="w-20 h-20 bg-indigo-500/20 text-indigo-400 rounded-full flex items-center justify-center mb-6 animate-pulse shadow-[0_0_40px_rgba(99,102,241,0.4)]">
+               <Bell className="w-10 h-10 animate-bounce" />
+             </div>
+             <h3 className="text-2xl font-bold text-white mb-2">{inAppAlarm.title}</h3>
+             <p className="text-slate-400 font-medium mb-8">{inAppAlarm.body}</p>
+             <button onClick={() => setInAppAlarm(null)} className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl font-bold text-lg transition-transform active:scale-95 shadow-lg shadow-indigo-600/20">
+               {lang === 'id' ? 'Tutup Pengingat' : 'Dismiss Alarm'}
+             </button>
+           </div>
+        </div>
+      )}
+
+      {inAppAlarm && !inAppAlarm.isAlarm && (
         <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[200] max-w-sm w-[90%] md:w-full bg-indigo-600 shadow-xl shadow-indigo-600/20 rounded-2xl p-4 flex items-start gap-4 animate-in slide-in-from-top-4 fade-in duration-300">
            <Bell className="w-6 h-6 text-white shrink-0 mt-0.5" />
            <div className="flex-1">

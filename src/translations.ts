@@ -1,3 +1,5 @@
+import { useCallback } from 'react';
+
 export const translations = {
   id: {
     hello: 'Halo,',
@@ -398,7 +400,7 @@ export const translations = {
 };
 
 export const useTranslation = (lang: 'id' | 'en') => {
-  return (key: keyof typeof translations['id']) => {
+  return useCallback((key: keyof typeof translations['id']) => {
     return translations[lang][key] || translations['id'][key] || key;
-  };
+  }, [lang]);
 };

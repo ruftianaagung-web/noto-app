@@ -258,7 +258,7 @@ export default function TasksScreen({ onNavigate }: { onNavigate?: (s: any) => v
                      <div className="flex-1">
                        <span className="text-[10px] text-slate-500 font-medium mb-1.5 ml-1 flex items-center gap-1">
                          <Bell className="w-3 h-3 text-indigo-400" />
-                         {lang === 'id' ? 'Alarm' : 'Alarm'}
+                         {lang === 'id' ? 'Pengingat' : 'Reminder'}
                        </span>
                        <div className="relative">
                          <input
