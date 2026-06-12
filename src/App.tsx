@@ -18,6 +18,15 @@ import { useTranslation } from './translations';
 
 export type ScreenItem = 'home' | 'tasks' | 'search' | 'calendar' | 'settings' | 'note-editor';
 
+let activeAudio: HTMLAudioElement | null = null;
+
+export const stopGlobalAudio = () => {
+  if (activeAudio) {
+    activeAudio.pause();
+    activeAudio.currentTime = 0;
+  }
+};
+
 export default function App() {
   const { 
     appPin, isUnlocked, setIsUnlocked, lang, tasks, 
@@ -52,10 +61,16 @@ export default function App() {
           setTimeout(() => setInAppAlarm(prev => prev && prev.id === id ? null : prev), 10000);
         }
         
+        stopGlobalAudio();
         try {
-          // Play a native sound via HTML Audio for maximum compatibility (won't throw without interaction)
-          const audio = new Audio('/alarm.mp3');
-          audio.play().catch(() => {});
+          // Play a native sound via HTML Audio for maximum compatibility
+          activeAudio = new Audio('/alarm.mp3');
+          if (isAlarm) {
+            activeAudio.loop = true;
+          }
+          activeAudio.play().catch(() => {
+             if ("vibrate" in navigator) navigator.vibrate([500, 250, 500, 250, 500]);
+          });
         } catch(e) {}
         
         try {
@@ -98,7 +113,7 @@ export default function App() {
       };
 
       // 1. Global Daily Reminder
-      if (reminderActive && currentTime === reminderTime && lastNotif !== `${todayDate}_${reminderTime}`) {
+      if (reminderActive && currentTime >= reminderTime && lastNotif !== `${todayDate}_${reminderTime}`) {
         localStorage.setItem('noto_last_notif_date_time', `${todayDate}_${reminderTime}`);
         const todayTasks = tasks.filter(t => {
             if (t.date === 'Hari ini' || t.date.toLowerCase() === 'today' || t.repeat === 'daily') return true;
@@ -121,8 +136,8 @@ export default function App() {
 
       // 2. Individual Task Alarms
       tasks.forEach(task => {
-        // Skip completed tasks, tasks with no alarm, or tasks whose alarm is not right now
-        if (task.completed || !task.alarmTime || task.alarmTime !== currentTime) return;
+        // Skip completed tasks or tasks with no alarm
+        if (task.completed || !task.alarmTime) return;
 
         // Check if the task is scheduled for today
         let isToday = false;
@@ -131,11 +146,14 @@ export default function App() {
         }
 
         if (isToday) {
-           const alarmKey = `noto_alarm_${task.id}_${todayDate}_${currentTime}`;
-           if (!localStorage.getItem(alarmKey)) {
-             localStorage.setItem(alarmKey, 'true');
-             const message = lang === 'id' ? `Ayo lakukan tugas ${task.title} kamu!` : `Time to do your task: ${task.title}!`;
-             sendNotification(task.title, message, true);
+           // Fire if currentTime is past the alarmTime, so we don't miss it due to interval throttling
+           if (currentTime >= task.alarmTime) {
+             const alarmKey = `noto_alarm_${task.id}_${todayDate}`;
+             if (!localStorage.getItem(alarmKey)) {
+               localStorage.setItem(alarmKey, 'true');
+               const message = lang === 'id' ? `Ayo lakukan tugas ${task.title} kamu!` : `Time to do your task: ${task.title}!`;
+               sendNotification(task.title, message, true);
+             }
            }
         }
       });
@@ -195,7 +213,7 @@ export default function App() {
              </div>
              <h3 className="text-2xl font-bold text-white mb-2">{inAppAlarm.title}</h3>
              <p className="text-slate-400 font-medium mb-8">{inAppAlarm.body}</p>
-             <button onClick={() => setInAppAlarm(null)} className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl font-bold text-lg transition-transform active:scale-95 shadow-lg shadow-indigo-600/20">
+             <button onClick={() => { setInAppAlarm(null); stopGlobalAudio(); }} className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl font-bold text-lg transition-transform active:scale-95 shadow-lg shadow-indigo-600/20">
                {lang === 'id' ? 'Tutup Pengingat' : 'Dismiss Alarm'}
              </button>
            </div>
@@ -209,7 +227,7 @@ export default function App() {
              <h4 className="font-bold text-white text-sm mb-1">{inAppAlarm.title}</h4>
              <p className="text-white/80 text-xs leading-relaxed">{inAppAlarm.body}</p>
            </div>
-           <button onClick={() => setInAppAlarm(null)} className="p-1 hover:bg-white/10 rounded-lg transition-colors text-white/80 hover:text-white">
+           <button onClick={() => { setInAppAlarm(null); stopGlobalAudio(); }} className="p-1 hover:bg-white/10 rounded-lg transition-colors text-white/80 hover:text-white">
              <X className="w-4 h-4" />
            </button>
         </div>
