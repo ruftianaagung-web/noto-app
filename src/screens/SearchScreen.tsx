@@ -202,7 +202,6 @@ export default function SearchScreen({ onOpenNote }: { onOpenNote: (note: Note) 
              onChange={e => setSearchQuery(e.target.value)}
              placeholder={t('search') || "Cari catatan, tugas, atau tag..."}
              className="w-full bg-slate-900 border border-slate-800 rounded-2xl h-12 pl-12 pr-10 text-sm text-slate-50 placeholder-slate-500 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all font-medium"
-             autoFocus
            />
            {searchQuery && (
              <button onClick={() => setSearchQuery('')} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-50">

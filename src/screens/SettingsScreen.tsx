@@ -6,7 +6,7 @@ import {
 import { useAppStore } from '../store';
 import { useTranslation } from '../translations';
 
-export default function SettingsScreen({ isDarkMode, toggleDark }: { isDarkMode: boolean, toggleDark: () => void }) {
+export default function SettingsScreen({ appTheme, setAppTheme }: { appTheme: string, setAppTheme: (t: 'dark' | 'light' | 'pink') => void }) {
   const { notes, tasks, user, updateUser, appPin, setAppPin, setIsUnlocked, importData, clearAllData, lang, setLang, streak, reminderActive, setReminderActive, reminderTime, setReminderTime } = useAppStore();
   const t = useTranslation(lang);
 
@@ -109,14 +109,17 @@ export default function SettingsScreen({ isDarkMode, toggleDark }: { isDarkMode:
                 <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-slate-400">
                   <Moon size={16} />
                 </div>
-                <span className="font-medium text-sm text-slate-300">{t('darkTheme')}</span>
+                <span className="font-medium text-sm text-slate-300">{lang === 'id' ? 'Tema Aplikasi' : 'App Theme'}</span>
               </div>
-              <button 
-                onClick={toggleDark}
-                className={`w-12 h-7 rounded-full flex items-center p-1 transition-colors ${isDarkMode ? 'bg-indigo-500' : 'bg-slate-700'}`}
+              <select 
+                value={appTheme}
+                onChange={(e) => setAppTheme(e.target.value as 'dark' | 'light' | 'pink')}
+                className="bg-transparent text-indigo-400 font-bold text-sm outline-none cursor-pointer text-right"
               >
-                 <div className={`w-5 h-5 rounded-full bg-white transition-transform ${isDarkMode ? 'translate-x-5' : 'translate-x-0'}`} />
-              </button>
+                <option value="dark">{lang === 'id' ? 'Gelap' : 'Dark'}</option>
+                <option value="light">{lang === 'id' ? 'Terang' : 'Light'}</option>
+                <option value="pink">{lang === 'id' ? 'Ecy' : 'Ecy'}</option>
+              </select>
             </div>
 
             <div className="flex items-center justify-between p-4 px-5">
@@ -285,7 +288,7 @@ export default function SettingsScreen({ isDarkMode, toggleDark }: { isDarkMode:
                 </div>
                 <span className="font-medium text-sm text-slate-300">{t('appVersion')}</span>
               </div>
-              <span className="font-bold text-sm text-slate-500">v1.0.0</span>
+              <span className="font-bold text-sm text-slate-500">v1.1.0</span>
             </div>
 
             <button onClick={() => setShowUpdateNotes(true)} className="flex items-center justify-between p-4 px-5 hover:bg-slate-800/50 transition-colors border-b border-slate-800 w-full text-left">
@@ -504,10 +507,12 @@ export default function SettingsScreen({ isDarkMode, toggleDark }: { isDarkMode:
             <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl w-full max-w-sm max-h-[80vh] flex flex-col">
               <h3 className="text-xl font-bold text-slate-50 mb-4">{t('aboutAppTitle')}</h3>
               <div className="overflow-y-auto pr-2 flex-1 space-y-4 mb-6 custom-scrollbar text-sm text-slate-300">
-                <p><strong>Noto v1.0.0</strong></p>
+                <p><strong>Noto v1.1.0</strong></p>
                 <p>{t('aboutAppDesc')}</p>
                 <p><strong>{t('aboutAppWhatsNew')}</strong></p>
                 <ul className="list-disc pl-5 space-y-2">
+                  <li><strong>{t('aboutAppFeat7')}</strong> {t('aboutAppFeat7Desc')}</li>
+                  <li><strong>{t('aboutAppFeat8')}</strong> {t('aboutAppFeat8Desc')}</li>
                   <li><strong>{t('aboutAppFeat1')}</strong> {t('aboutAppFeat1Desc')}</li>
                   <li><strong>{t('aboutAppFeat2')}</strong> {t('aboutAppFeat2Desc')}</li>
                   <li><strong>{t('aboutAppFeat3')}</strong> {t('aboutAppFeat3Desc')}</li>

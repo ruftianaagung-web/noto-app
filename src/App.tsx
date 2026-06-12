@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Home, CheckCircle2, Calendar as CalendarIcon, Settings, Lock, Layers, Feather, Bell, X } from 'lucide-react';
+import { Home, CheckCircle2, Calendar as CalendarIcon, Settings, Lock, Layers, Bell, X } from 'lucide-react';
 import HomeScreen from './screens/HomeScreen';
 import TasksScreen from './screens/TasksScreen';
 import CalendarScreen from './screens/CalendarScreen';
@@ -25,7 +25,11 @@ export default function App() {
   } = useAppStore();
   const t = useTranslation(lang);
   const [currentScreen, setCurrentScreen] = useState<ScreenItem>('home');
-  const [isDarkMode, setIsDarkMode] = useState(true); // Sleek interface defaults to dark mode
+  const [appTheme, setAppTheme] = useState<'dark' | 'light' | 'pink'>(() => (localStorage.getItem('noto_theme') as 'dark' | 'light' | 'pink') || 'dark');
+  
+  useEffect(() => {
+    localStorage.setItem('noto_theme', appTheme);
+  }, [appTheme]);
   const [activeNote, setActiveNote] = useState<Note | null>(null);
   const [inAppAlarm, setInAppAlarm] = useState<{id: number, title: string, body: string} | null>(null);
 
@@ -39,7 +43,7 @@ export default function App() {
       
       const localDate = new Date(now.getTime() - (now.getTimezoneOffset() * 60000));
       const todayDate = localDate.toISOString().split('T')[0];
-      const lastNotif = localStorage.getItem('noto_last_notif_date');
+      const lastNotif = localStorage.getItem('noto_last_notif_date_time');
       
       const sendNotification = (title: string, body: string) => {
         const id = Date.now();
@@ -67,7 +71,7 @@ export default function App() {
           try {
             if (navigator.serviceWorker) {
               navigator.serviceWorker.getRegistration().then(reg => {
-                if (reg) reg.showNotification(title, { body: body, icon: '/icon.png', badge: '/icon.png' });
+                if (reg && reg.active) reg.showNotification(title, { body: body, icon: '/icon.png', badge: '/icon.png' });
                 else new Notification(title, { body, icon: '/icon.png' });
               }).catch(() => { new Notification(title, { body, icon: '/icon.png' }); });
             } else {
@@ -78,8 +82,8 @@ export default function App() {
       };
 
       // 1. Global Daily Reminder
-      if (reminderActive && currentTime === reminderTime && lastNotif !== todayDate) {
-        localStorage.setItem('noto_last_notif_date', todayDate);
+      if (reminderActive && currentTime === reminderTime && lastNotif !== `${todayDate}_${reminderTime}`) {
+        localStorage.setItem('noto_last_notif_date_time', `${todayDate}_${reminderTime}`);
         const todayTasks = tasks.filter(t => {
             if (t.date === 'Hari ini' || t.date.toLowerCase() === 'today') return true;
             return t.date === todayDate;
@@ -137,9 +141,15 @@ export default function App() {
     setCurrentScreen('home');
   };
 
+  const getThemeClass = () => {
+    if (appTheme === 'light') return 'light-theme bg-slate-950';
+    if (appTheme === 'pink') return 'pink-theme bg-slate-950';
+    return 'bg-slate-950';
+  };
+
   if (!hasCompletedOnboarding) {
     return (
-      <div className={`w-full h-[100dvh] flex flex-col md:flex-row ${!isDarkMode ? 'light-theme' : 'bg-slate-950'} text-slate-200 font-sans relative overflow-hidden`}>
+      <div className={`w-full h-[100dvh] flex flex-col md:flex-row ${getThemeClass()} text-slate-200 font-sans relative overflow-hidden`}>
         <div className="flex-1 w-full mx-auto max-w-[1920px]">
           <OnboardingScreen onFinish={() => setHasCompletedOnboarding(true)} />
         </div>
@@ -149,16 +159,16 @@ export default function App() {
 
   if (isLocked) {
     return (
-      <div className={`w-full h-[100dvh] flex flex-col md:flex-row ${!isDarkMode ? 'light-theme' : 'bg-slate-950'} text-slate-200 font-sans relative overflow-hidden`}>
+      <div className={`w-full h-[100dvh] flex flex-col md:flex-row ${getThemeClass()} text-slate-200 font-sans relative overflow-hidden`}>
         <div className="flex-1 w-full mx-auto max-w-[1920px]">
-          <PinScreen correctPin={appPin} onUnlock={() => setIsUnlocked(true)} isDarkMode={isDarkMode} lang={lang} />
+          <PinScreen correctPin={appPin} onUnlock={() => setIsUnlocked(true)} appTheme={appTheme} lang={lang} />
         </div>
       </div>
     );
   }
 
   return (
-    <div className={`w-full h-[100dvh] flex flex-col md:flex-row ${!isDarkMode ? 'light-theme' : 'bg-slate-950'} text-slate-200 font-sans relative overflow-hidden`}>
+    <div className={`w-full h-[100dvh] flex flex-col md:flex-row ${getThemeClass()} text-slate-200 font-sans relative overflow-hidden`}>
       
       {inAppAlarm && (
         <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[200] max-w-sm w-[90%] md:w-full bg-indigo-600 shadow-xl shadow-indigo-600/20 rounded-2xl p-4 flex items-start gap-4 animate-in slide-in-from-top-4 fade-in duration-300">
@@ -198,12 +208,12 @@ export default function App() {
       )}
 
       <div className="flex-1 relative flex flex-col overflow-hidden w-full max-w-[1920px] mx-auto">
-        {currentScreen === 'home' && <HomeScreen isDarkMode={isDarkMode} toggleDark={() => setIsDarkMode(!isDarkMode)} onOpenNote={openNote} onNavigate={(screen) => setCurrentScreen(screen)} />}
+        {currentScreen === 'home' && <HomeScreen appTheme={appTheme} setAppTheme={setAppTheme} onOpenNote={openNote} onNavigate={(screen) => setCurrentScreen(screen)} />}
         {currentScreen === 'tasks' && <TasksScreen onNavigate={(screen) => setCurrentScreen(screen)} />}
         {currentScreen === 'calendar' && <CalendarScreen />}
         {currentScreen === 'note-editor' && activeNote && <NoteEditorScreen note={activeNote} onBack={closeNote} />}
         {currentScreen === 'search' && <SearchScreen onOpenNote={openNote} />}
-        {currentScreen === 'settings' && <SettingsScreen isDarkMode={isDarkMode} toggleDark={() => setIsDarkMode(!isDarkMode)} />}
+        {currentScreen === 'settings' && <SettingsScreen appTheme={appTheme} setAppTheme={setAppTheme} />}
       </div>
 
     </div>
@@ -228,7 +238,7 @@ function NavItem({ icon, label, active, onClick }: { icon: React.ReactNode, labe
   );
 }
 
-function PinScreen({ correctPin, onUnlock, isDarkMode, lang }: { correctPin: string, onUnlock: () => void, isDarkMode: boolean, lang: 'id' | 'en' }) {
+function PinScreen({ correctPin, onUnlock, appTheme, lang }: { correctPin: string, onUnlock: () => void, appTheme: string, lang: 'id' | 'en' }) {
   const t = useTranslation(lang);
   const [input, setInput] = useState('');
   const [error, setError] = useState(false);
@@ -270,8 +280,14 @@ function PinScreen({ correctPin, onUnlock, isDarkMode, lang }: { correctPin: str
     }
   };
 
+  const getThemeClass = () => {
+    if (appTheme === 'light') return 'light-theme bg-slate-950';
+    if (appTheme === 'pink') return 'pink-theme bg-slate-950';
+    return 'bg-slate-950';
+  };
+
   return (
-    <div className={`min-h-screen flex justify-center items-center ${!isDarkMode ? 'light-theme' : 'bg-slate-950'} relative`}>
+    <div className={`min-h-screen flex justify-center items-center ${getThemeClass()} relative`}>
       <div className="w-full max-w-[480px] min-h-[100dvh] relative flex flex-col items-center justify-center text-slate-200 font-sans p-8 shadow-2xl sm:border-x border-slate-800 bg-slate-950">
         <Lock className="w-12 h-12 text-indigo-500 mb-6" />
         <h2 className="text-xl font-bold tracking-tight mb-2">{t('pinLocked')}</h2>

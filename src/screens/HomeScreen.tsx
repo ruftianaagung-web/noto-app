@@ -1,18 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Feather, CheckSquare, Bell, Clock, Play, Pause, RotateCcw, X, Pin, FileText, Trash2, Flame, Sparkles, ChevronRight, Repeat } from 'lucide-react';
+import { Plus, CheckSquare, Bell, Clock, Play, Pause, RotateCcw, X, Pin, FileText, Trash2, Flame, Sparkles, ChevronRight, Repeat } from 'lucide-react';
 import { Note, Task } from '../types';
 import { useAppStore } from '../store';
 import { useTranslation } from '../translations';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface HomeProps {
-  isDarkMode: boolean;
-  toggleDark: () => void;
+  appTheme: string;
+  setAppTheme: (theme: 'dark' | 'light' | 'pink') => void;
   onOpenNote: (note: Note) => void;
   onNavigate: (screen: 'home' | 'tasks' | 'search' | 'calendar' | 'settings') => void;
 }
 
-export default function HomeScreen({ isDarkMode, toggleDark, onOpenNote, onNavigate }: HomeProps) {
+export default function HomeScreen({ appTheme, setAppTheme, onOpenNote, onNavigate }: HomeProps) {
   const { notes, tasks, user, updateUser, toggleTask, deleteTask, deleteNote, setSearchQuery, streak, lang } = useAppStore();
   const t = useTranslation(lang);
   
@@ -107,6 +107,7 @@ export default function HomeScreen({ isDarkMode, toggleDark, onOpenNote, onNavig
   };
 
   const [showNotificationModal, setShowNotificationModal] = useState(false);
+  const [hasSeenUpdate110, setHasSeenUpdate110] = useState(() => localStorage.getItem('noto_update_1_1_0') === 'true');
 
   const particleData = React.useMemo(() => {
     return [...Array(15)].map((_, i) => ({
@@ -289,7 +290,7 @@ export default function HomeScreen({ isDarkMode, toggleDark, onOpenNote, onNavig
           </button>
           <button className="p-3 -mr-2 text-slate-400 hover:text-slate-50 transition-colors relative" onClick={() => setShowNotificationModal(true)}>
             <Bell className="w-5 h-5" />
-            <span className="absolute top-2 right-2 w-2 h-2 bg-indigo-500 rounded-full border border-slate-900"></span>
+            {!hasSeenUpdate110 && <span className="absolute top-2 right-2 w-2 h-2 bg-indigo-500 rounded-full border border-slate-900"></span>}
           </button>
         </div>
       </div>
@@ -488,21 +489,39 @@ export default function HomeScreen({ isDarkMode, toggleDark, onOpenNote, onNavig
 
       {/* Notification Modal */}
       {showNotificationModal && (
-        <div className="absolute inset-0 bg-slate-950/95 z-[100] flex flex-col items-center justify-center animate-in fade-in duration-200 p-6" onClick={() => setShowNotificationModal(false)}>
+        <div className="absolute inset-0 bg-slate-950/95 z-[100] flex flex-col items-center justify-center animate-in fade-in duration-200 p-6" onClick={() => {
+          setShowNotificationModal(false);
+          if (!hasSeenUpdate110) {
+            localStorage.setItem('noto_update_1_1_0', 'true');
+            setHasSeenUpdate110(true);
+          }
+        }}>
            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 w-full max-w-sm flex flex-col shadow-2xl relative items-center text-center" onClick={e => e.stopPropagation()}>
               <button 
-                onClick={() => setShowNotificationModal(false)}
+                onClick={() => {
+                  setShowNotificationModal(false);
+                  if (!hasSeenUpdate110) {
+                    localStorage.setItem('noto_update_1_1_0', 'true');
+                    setHasSeenUpdate110(true);
+                  }
+                }}
                 className="absolute top-4 right-4 text-slate-500 hover:text-slate-50"
               >
                 <X className="w-5 h-5" />
               </button>
-              <div className="w-12 h-12 bg-indigo-500/10 text-indigo-400 rounded-2xl flex items-center justify-center mb-6">
+              <div className={`w-12 h-12 ${!hasSeenUpdate110 ? 'bg-indigo-500/10 text-indigo-400' : 'bg-slate-800 text-slate-400'} rounded-2xl flex items-center justify-center mb-6`}>
                 <Bell className="w-6 h-6" />
               </div>
-              <h3 className="text-lg font-bold text-slate-50 mb-2">{t('noNotification')}</h3>
-              <p className="text-sm text-slate-400 mb-6">{t('allNotificationRead')}</p>
+              <h3 className="text-lg font-bold text-slate-50 mb-2">{!hasSeenUpdate110 ? t('appUpdateTitle') : t('noNotification')}</h3>
+              <p className="text-sm text-slate-400 mb-6">{!hasSeenUpdate110 ? t('appUpdateBody') : t('allNotificationRead')}</p>
               <button 
-                onClick={() => setShowNotificationModal(false)}
+                onClick={() => {
+                  setShowNotificationModal(false);
+                  if (!hasSeenUpdate110) {
+                    localStorage.setItem('noto_update_1_1_0', 'true');
+                    setHasSeenUpdate110(true);
+                  }
+                }}
                 className="w-full py-4 rounded-xl font-bold bg-indigo-600 text-white hover:bg-indigo-500 transition-colors"
               >
                 {t('close')}
